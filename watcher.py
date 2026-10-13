@@ -148,6 +148,14 @@ def needs():
         perm=next((p for p in perms if p['name']!='AskUserQuestion'),None)
         qid=None;options=[]
         if not sess or sess.get('archived'):continue      # archived or deleted in Paseo: the user's deliberate choice
+        # "call me now" (coord.py callnow, or the coordinator escalating something urgent) goes out even while the agent
+        # is busy, until the user writes to it; the decision's own fingerprint makes the main loop dial at once
+        u=urgent_call(sid)
+        if u and not any(iso_epoch(t)>u['at'] and not from_me(m) for t,m in r['users']):
+            out[sid]=dict(sid=sid,title=(sm.get('short_title') or '').strip() or title,qid=None,paseo_id=sess.get('paseo_id'),
+                          name=sess.get('name') or '?',kind=u.get('kind') or 'waiting',
+                          need=u.get('note') or sm.get('waiting_on_you') or 'It needs you now.',doing=sm.get('doing',''),fp=u['fp'],options=[])
+            continue
         # the user has sent something newer than the agent's last reply: it has new work, whatever the summary says
         fresh_instruction=bool(r['users']) and (not r['asst'] or r['users'][-1][0]>r['asst'][-1][0])
         # stopped on a Claude usage limit: once it's been quiet a few minutes (the account switcher has usually moved on
@@ -357,6 +365,13 @@ def from_me(m):
     m=str(m).lstrip();return m.startswith('(') and 'coordinator' in m[:40].lower() or m.startswith('This session is being continued')
 
 HOLD_HOURS=float(ENV.get('HOLD_HOURS',3))   # a hold means "not now", not "never": after this, one more call
+
+def urgent_call(sid,max_age=3600):
+    """An explicit call-now decision from the last hour, or None."""
+    try:d=json.load(open(f'{DECISIONS}/{sid}.json'))
+    except Exception:return None
+    if d.get('action')=='call' and d.get('now') and time.time()-d.get('at',0)<max_age:return d
+    return None
 
 def held_since(sid):
     """ISO time an agent's open question was put on the user's list (coord.py hold), or None once it has expired."""
