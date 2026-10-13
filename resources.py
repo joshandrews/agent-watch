@@ -119,9 +119,28 @@ def idle_stacks(agent_text, idle_h=None):
     return idle
 
 
+def git_storm(dry=False, keep=2):
+    """Agents' commits and fetches each start a background `git maintenance --auto`. Worktrees share one object store,
+    so dozens can end up repacking the same repo at once (~1 GB of memory and a temp pack each). Keep the oldest
+    `keep`, stop the rest. Repacks are atomic, so stopping one leaves the repository intact."""
+    rows = sh("ps", "-Ao", "pid=,etimes=,command=").splitlines()
+    runs = [r.split(None, 2) for r in rows if "git maintenance run --auto" in r]
+    if len(runs) <= keep:
+        return None
+    extra = sorted(runs, key=lambda r: -int(r[1]))[keep:]          # oldest first, kept
+    if not dry:
+        for pid, _, _ in extra:
+            sh("pkill", "-TERM", "-P", pid)                        # its repack and pack-objects children
+            sh("kill", pid)
+    return f"stopped {len(extra)} of {len(runs)} concurrent git maintenance runs (kept {keep})"
+
+
 def run(dry=False):
     m = machine()
     actions = []
+    storm = git_storm(dry)
+    if storm:
+        actions.append(storm)
     # overloaded (run queue several times the core count): stacks idle for even an hour go too, and the
     # coordinator hears about it so it can ask the busiest agents to throttle their local checks
     overloaded = m["load"][0] > LOAD_X * m["cpus"]
