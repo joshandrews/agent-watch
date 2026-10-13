@@ -51,6 +51,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
     private var watch: AnyCancellable?
+    private var resized: [NSObjectProtocol] = []
 
     func applicationDidFinishLaunching(_ note: Notification) {
         AppDelegate.shared = self
@@ -84,10 +85,34 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
         store.reload()
         popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
         popover.contentViewController?.view.window?.makeKey()
+        // The list measures itself after the popover opens, and a window grows from its bottom-left corner, so the
+        // popover would grow upwards past the menu bar and hide its header. Keep its top pinned under the icon.
+        resized.forEach(NotificationCenter.default.removeObserver)
+        let window = popover.contentViewController?.view.window
+        resized = [NSWindow.didResizeNotification, NSWindow.didMoveNotification].map { name in
+            NotificationCenter.default.addObserver(forName: name, object: window, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.pinUnderIcon() }
+            }
+        }
+        pinUnderIcon()
         NSApp.activate()
     }
 
     func close() { popover.performClose(nil) }
+
+    /// Puts the popover's top edge just under the menu bar icon.
+    private func pinUnderIcon() {
+        guard popover.isShown, let w = popover.contentViewController?.view.window, let bar = item.button?.window else { return }
+        let top = bar.frame.minY
+        if abs(w.frame.maxY - top) > 0.5 { w.setFrameTopLeftPoint(NSPoint(x: w.frame.minX, y: top)) }
+    }
+
+    func popoverDidShow(_ note: Notification) { pinUnderIcon() }
+
+    func popoverDidClose(_ note: Notification) {
+        resized.forEach(NotificationCenter.default.removeObserver)
+        resized = []
+    }
 
     var popoverWindow: NSWindow? { popover.isShown ? popover.contentViewController?.view.window : nil }
 

@@ -127,7 +127,7 @@ enum SelfTest {
             let code = p.pairing?.code ?? "-"
             return "me=\(p.myName)/\(p.identity.id) code=\(code) linked=\(p.linkedCount) peers=" + p.peers.map { "\($0.name)/\($0.id)/\($0.share)/\(p.online.contains($0.id) ? "on" : "off")" }.joined(separator: ",")
         case "windows":
-            return NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) \(Int($0.frame.width))x\(Int($0.frame.height))" }.joined(separator: "; ")
+            return NSApp.windows.map { "\(type(of: $0)) visible=\($0.isVisible) \(Int($0.frame.minX)),\(Int($0.frame.minY)) \(Int($0.frame.width))x\(Int($0.frame.height))" }.joined(separator: "; ")
         case "dump":
             guard let root = popover() else { return "window not open" }
             var lines: [String] = []
