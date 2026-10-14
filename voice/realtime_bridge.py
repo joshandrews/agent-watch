@@ -365,7 +365,8 @@ def start_tunnel():
     p = subprocess.Popen(["cloudflared", "tunnel", "--no-autoupdate", "--url", f"http://127.0.0.1:{PORT}"],
                          stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
     for line in p.stderr:
-        m = re.search(r"https://[a-z0-9-]+\.trycloudflare\.com", line)
+        # a quick tunnel is a random hyphenated name; skip Cloudflare's own hosts (e.g. api.trycloudflare.com in errors)
+        m = re.search(r"https://(?!api\.)[a-z0-9]+(?:-[a-z0-9]+)+\.trycloudflare\.com", line)
         if m:
             STATE["tunnel"] = m.group(0)
             log("tunnel", m.group(0))
